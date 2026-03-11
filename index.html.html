@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>MapField — Mappatura Territorio</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1f2937;
+    --border: #2d3748;
+    --accent: #38d39f;
+    --accent2: #f6c90e;
+    --danger: #ff5757;
+    --text: #e2e8f0;
+    --muted: #718096;
+    --mono: 'Space Mono', monospace;
+    --sans: 'Barlow', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; overflow-x: hidden; }
+
+  header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 14px 20px; display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-icon { width: 34px; height: 34px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .logo-text { font-family: var(--mono); font-size: 15px; font-weight: 700; letter-spacing: 1px; color: var(--accent); }
+  .logo-sub { font-size: 10px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; display: block; margin-top: -2px; }
+  .counter-badge { background: var(--accent); color: #0d1117; font-family: var(--mono); font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 20px; }
+
+  #httpsWarning { display:none; background:#f6c90e; color:#0d1117; padding:10px 16px; font-size:12px; font-weight:600; text-align:center; line-height:1.5; }
+
+  .tabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 4px; }
+  .tab { flex: 1; padding: 12px 8px; text-align: center; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; letter-spacing: 0.5px; text-transform: uppercase; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .page { display: none; padding: 20px; }
+  .page.active { display: block; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  .card-label { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
+
+  /* GPS */
+  .gps-coords { font-family: var(--mono); font-size: 13px; color: var(--accent); line-height: 1.7; }
+  .gps-coords span.dim { color: var(--muted); font-size: 11px; }
+  .gps-status { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+  .dot.green { background: var(--accent); animation: pulse 1.5s infinite; }
+  .dot.yellow { background: var(--accent2); animation: pulse 1.5s infinite; }
+  .dot.red { background: var(--danger); }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .btn-gps { width: 100%; margin-top: 12px; padding: 10px; background: transparent; border: 1px solid var(--accent); color: var(--accent); border-radius: 8px; font-family: var(--sans); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+  .btn-gps:active { background: var(--accent); color: #0d1117; }
+
+  /* DATETIME */
+  .datetime-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+  .dt-block { text-align: center; }
+  .dt-val { font-family: var(--mono); font-size: 20px; color: var(--accent2); font-weight: 700; }
+  .dt-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); margin-top: 2px; }
+  .dt-sep { font-family: var(--mono); font-size: 24px; color: var(--border); }
+
+  /* MULTI-PHOTO */
+  .photo-section { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 16px; }
+  .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+  .photo-thumb { position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+  .photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .photo-thumb .remove-btn { position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.75); border: none; color: white; width: 22px; height: 22px; border-radius: 50%; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .photo-add-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; aspect-ratio: 1; border-radius: 8px; border: 2px dashed var(--border); cursor: pointer; color: var(--muted); font-size: 11px; gap: 4px; transition: border-color 0.2s; background: transparent; }
+  .photo-add-btn:active { border-color: var(--accent); color: var(--accent); }
+  .photo-add-icon { font-size: 22px; }
+  #photoInput { display: none; }
+
+  /* COMMENT */
+  .comment-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 20px; }
+  .comment-label { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); font-weight: 600; margin-bottom: 10px; display: flex; justify-content: space-between; }
+  .char-count { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .char-count.warn { color: var(--accent2); }
+  .char-count.over { color: var(--danger); }
+  textarea { width: 100%; background: transparent; border: none; outline: none; color: var(--text); font-family: var(--sans); font-size: 15px; line-height: 1.5; resize: none; min-height: 60px; }
+  textarea::placeholder { color: var(--border); }
+
+  /* SAVE */
+  .btn-save { width: 100%; padding: 16px; background: var(--accent); color: #0d1117; border: none; border-radius: 12px; font-family: var(--sans); font-size: 16px; font-weight: 700; cursor: pointer; letter-spacing: 1px; text-transform: uppercase; transition: all 0.2s; }
+  .btn-save:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+  .btn-save:not(:disabled):active { transform: scale(0.98); }
+
+  /* FLASH */
+  .flash { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.8); background: var(--accent); color: #0d1117; padding: 20px 40px; border-radius: 16px; font-weight: 700; font-size: 18px; z-index: 999; opacity: 0; pointer-events: none; transition: all 0.3s; text-align: center; }
+  .flash.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+  /* LIST */
+  .list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
+  .list-title { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); font-weight: 600; }
+  .export-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .btn-export { padding: 7px 12px; background: transparent; border: 1px solid var(--accent2); color: var(--accent2); border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: var(--sans); transition: all 0.2s; white-space: nowrap; }
+  .btn-export.accent { border-color: var(--accent); color: var(--accent); }
+  .btn-export.muted { border-color: var(--muted); color: var(--muted); }
+  .btn-export:active { opacity: 0.7; }
+
+  /* POINT CARD */
+  .point-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 12px; overflow: hidden; animation: slideIn 0.3s ease; }
+  @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .point-photos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+  .point-photos img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+  .point-photos.one img { aspect-ratio: 16/9; }
+  .point-body { padding: 12px 14px; }
+  .point-meta { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+  .point-id { font-family: var(--mono); font-size: 10px; color: var(--accent); background: rgba(56,211,159,0.1); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(56,211,159,0.2); }
+  .point-time { font-family: var(--mono); font-size: 10px; color: var(--muted); text-align: right; }
+  .point-coords { font-family: var(--mono); font-size: 11px; color: var(--accent); margin-bottom: 6px; line-height: 1.6; }
+  .point-comment { font-size: 14px; color: var(--text); line-height: 1.5; border-left: 2px solid var(--accent2); padding-left: 10px; margin-top: 8px; font-style: italic; }
+  .point-actions { display: flex; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .btn-action { flex: 1; padding: 7px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; border: none; font-family: var(--sans); transition: all 0.2s; }
+  .btn-maps { background: rgba(56,211,159,0.1); color: var(--accent); border: 1px solid rgba(56,211,159,0.2) !important; }
+  .btn-del { background: rgba(255,87,87,0.1); color: var(--danger); border: 1px solid rgba(255,87,87,0.2) !important; }
+
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .empty-icon { font-size: 48px; margin-bottom: 12px; }
+
+  /* PDF PROGRESS */
+  .pdf-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 500; align-items: center; justify-content: center; flex-direction: column; gap: 16px; }
+  .pdf-overlay.show { display: flex; }
+  .pdf-msg { color: white; font-size: 16px; font-weight: 600; }
+  .pdf-bar-wrap { width: 200px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .pdf-bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s; border-radius: 3px; }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">📍</div>
+    <div>
+      <div class="logo-text">MapField</div>
+      <span class="logo-sub">Mappatura Territorio</span>
+    </div>
+  </div>
+  <div class="counter-badge" id="totalBadge">0 pt</div>
+</header>
+
+<div id="httpsWarning">
+  ⚠️ Il GPS richiede HTTPS. Apri la pagina tramite un server (es. GitHub Pages, Netlify) e non come file locale.
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('capture')">📍 Rileva</div>
+  <div class="tab" onclick="switchTab('list')">📋 Punti</div>
+</div>
+
+<!-- PAGE: CAPTURE -->
+<div class="page active" id="page-capture">
+
+  <div class="card">
+    <div class="card-label">📡 Posizione GPS</div>
+    <div class="gps-coords" id="coordsDisplay">
+      <div><span class="dim">LAT</span>  —</div>
+      <div><span class="dim">LON</span>  —</div>
+      <div><span class="dim">ACC</span>  —</div>
+    </div>
+    <div class="gps-status">
+      <div class="dot" id="gpsDot"></div>
+      <span id="gpsStatusText">In attesa di rilevamento…</span>
+    </div>
+    <button class="btn-gps" onclick="getLocation()">🔄 Aggiorna posizione</button>
+  </div>
+
+  <div class="datetime-card">
+    <div class="dt-block">
+      <div class="dt-val" id="dtDate">--/--/----</div>
+      <div class="dt-lbl">Data</div>
+    </div>
+    <div class="dt-sep">|</div>
+    <div class="dt-block">
+      <div class="dt-val" id="dtTime">--:--:--</div>
+      <div class="dt-lbl">Ora</div>
+    </div>
+  </div>
+
+  <!-- MULTI PHOTO -->
+  <div class="photo-section">
+    <div class="card-label">📷 Foto (max 6)</div>
+    <div class="photo-grid" id="photoGrid">
+      <button class="photo-add-btn" onclick="document.getElementById('photoInput').click()">
+        <span class="photo-add-icon">+</span>
+        <span>Aggiungi</span>
+      </button>
+    </div>
+    <input type="file" id="photoInput" accept="image/*" capture="environment" multiple onchange="handlePhotos(event)">
+  </div>
+
+  <div class="comment-wrap">
+    <div class="comment-label">
+      <span>✏️ Nota / Commento</span>
+      <span class="char-count" id="charCount">0 / 100</span>
+    </div>
+    <textarea id="commentInput" placeholder="Inserisci una breve descrizione del punto…" maxlength="100" rows="3" oninput="updateCharCount()"></textarea>
+  </div>
+
+  <button class="btn-save" id="btnSave" onclick="savePoint()" disabled>📌 Salva Punto</button>
+</div>
+
+<!-- PAGE: LIST -->
+<div class="page" id="page-list">
+  <div class="list-header">
+    <span class="list-title">Punti rilevati</span>
+    <div class="export-btns">
+      <button class="btn-export" onclick="exportCSV()">⬇ CSV</button>
+      <button class="btn-export accent" onclick="exportJSON()">⬇ JSON</button>
+      <button class="btn-export" onclick="exportPDF()" style="border-color:#e06bff;color:#e06bff">⬇ PDF</button>
+      <label class="btn-export muted" style="cursor:pointer">
+        ⬆ Importa<input type="file" accept=".json" style="display:none" onchange="importJSON(event)">
+      </label>
+    </div>
+  </div>
+  <div id="pointsList">
+    <div class="empty-state">
+      <div class="empty-icon">🗺️</div>
+      <p>Nessun punto ancora registrato.<br>Usa la scheda <strong>Rileva</strong> per aggiungerne uno.</p>
+    </div>
+  </div>
+</div>
+
+<div class="flash" id="flash">✓</div>
+
+<!-- PDF PROGRESS -->
+<div class="pdf-overlay" id="pdfOverlay">
+  <div class="pdf-msg" id="pdfMsg">Generazione PDF…</div>
+  <div class="pdf-bar-wrap"><div class="pdf-bar" id="pdfBar"></div></div>
+</div>
+
+<script>
+  let currentLat = null, currentLon = null, currentAcc = null;
+  let pendingPhotos = []; // array di base64
+  let points = JSON.parse(localStorage.getItem('mapfield_points') || '[]');
+  let watchId = null;
+
+  // ─── CLOCK ───────────────────────────────────────────────────────────
+  function startClock() {
+    function tick() {
+      const now = new Date();
+      document.getElementById('dtDate').textContent = now.toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric' });
+      document.getElementById('dtTime').textContent = now.toLocaleTimeString('it-IT');
+    }
+    tick();
+    setInterval(tick, 1000);
+  }
+
+  // ─── GPS ─────────────────────────────────────────────────────────────
+  function onGPSSuccess(pos) {
+    currentLat = pos.coords.latitude;
+    currentLon = pos.coords.longitude;
+    currentAcc = Math.round(pos.coords.accuracy);
+    const dot = document.getElementById('gpsDot');
+    dot.className = currentAcc <= 30 ? 'dot green' : 'dot yellow';
+    document.getElementById('gpsStatusText').textContent = `Precisione: ±${currentAcc} m — live`;
+    document.getElementById('coordsDisplay').innerHTML = `
+      <div><span class="dim">LAT</span>  ${currentLat.toFixed(6)}°</div>
+      <div><span class="dim">LON</span>  ${currentLon.toFixed(6)}°</div>
+      <div><span class="dim">ACC</span>  ±${currentAcc} m</div>`;
+    checkSaveReady();
+  }
+
+  function onGPSError(err) {
+    document.getElementById('gpsDot').className = 'dot red';
+    const msgs = { 1:'Permesso GPS negato — abilitalo nelle impostazioni', 2:'Segnale GPS non disponibile', 3:'Timeout — riprovo…' };
+    document.getElementById('gpsStatusText').textContent = msgs[err.code] || 'Errore GPS';
+    if (err.code === 3) navigator.geolocation.getCurrentPosition(onGPSSuccess, ()=>{}, { enableHighAccuracy: false, timeout: 20000, maximumAge: 30000 });
+  }
+
+  function getLocation() {
+    if (!navigator.geolocation) { document.getElementById('gpsStatusText').textContent = 'GPS non supportato'; return; }
+    document.getElementById('gpsDot').className = 'dot yellow';
+    document.getElementById('gpsStatusText').textContent = 'Rilevamento…';
+    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+    navigator.geolocation.getCurrentPosition(onGPSSuccess, ()=>{}, { enableHighAccuracy: false, timeout: 5000, maximumAge: 10000 });
+    watchId = navigator.geolocation.watchPosition(onGPSSuccess, onGPSError, { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 });
+  }
+
+  // ─── MULTI PHOTO ─────────────────────────────────────────────────────
+  function handlePhotos(e) {
+    const files = Array.from(e.target.files);
+    const remaining = 6 - pendingPhotos.length;
+    files.slice(0, remaining).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        pendingPhotos.push(ev.target.result);
+        renderPhotoGrid();
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  }
+
+  function renderPhotoGrid() {
+    const grid = document.getElementById('photoGrid');
+    grid.innerHTML = '';
+    pendingPhotos.forEach((src, i) => {
+      const thumb = document.createElement('div');
+      thumb.className = 'photo-thumb';
+      thumb.innerHTML = `<img src="${src}" alt="foto ${i+1}"><button class="remove-btn" onclick="removePhoto(${i})">✕</button>`;
+      grid.appendChild(thumb);
+    });
+    if (pendingPhotos.length < 6) {
+      const addBtn = document.createElement('button');
+      addBtn.className = 'photo-add-btn';
+      addBtn.innerHTML = '<span class="photo-add-icon">+</span><span>Aggiungi</span>';
+      addBtn.onclick = () => document.getElementById('photoInput').click();
+      grid.appendChild(addBtn);
+    }
+  }
+
+  function removePhoto(i) {
+    pendingPhotos.splice(i, 1);
+    renderPhotoGrid();
+  }
+
+  // ─── COMMENT ─────────────────────────────────────────────────────────
+  function updateCharCount() {
+    const len = document.getElementById('commentInput').value.length;
+    const el = document.getElementById('charCount');
+    el.textContent = `${len} / 100`;
+    el.className = 'char-count' + (len >= 100 ? ' over' : len >= 80 ? ' warn' : '');
+  }
+
+  function checkSaveReady() {
+    document.getElementById('btnSave').disabled = currentLat === null;
+  }
+
+  // ─── SAVE ────────────────────────────────────────────────────────────
+  function savePoint() {
+    if (currentLat === null) return;
+    const now = new Date();
+    const point = {
+      id: 'P' + String(points.length + 1).padStart(3, '0'),
+      ts: now.toISOString(),
+      date: now.toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric' }),
+      time: now.toLocaleTimeString('it-IT'),
+      lat: currentLat, lon: currentLon, acc: currentAcc,
+      comment: document.getElementById('commentInput').value.trim(),
+      photos: [...pendingPhotos]
+    };
+    points.unshift(point);
+    localStorage.setItem('mapfield_points', JSON.stringify(points));
+    document.getElementById('commentInput').value = '';
+    updateCharCount();
+    pendingPhotos = [];
+    renderPhotoGrid();
+    updateBadge();
+    renderPoints();
+    showFlash(`✓ ${point.id} salvato`);
+  }
+
+  // ─── FLASH ───────────────────────────────────────────────────────────
+  function showFlash(msg) {
+    const f = document.getElementById('flash');
+    f.textContent = msg;
+    f.classList.add('show');
+    setTimeout(() => f.classList.remove('show'), 1800);
+  }
+
+  // ─── RENDER LIST ─────────────────────────────────────────────────────
+  function renderPoints() {
+    const container = document.getElementById('pointsList');
+    if (!points.length) {
+      container.innerHTML = `<div class="empty-state"><div class="empty-icon">🗺️</div><p>Nessun punto ancora registrato.<br>Usa la scheda <strong>Rileva</strong> per aggiungerne uno.</p></div>`;
+      return;
+    }
+    container.innerHTML = points.map((p, i) => {
+      const photos = p.photos || (p.photo ? [p.photo] : []);
+      const photosHtml = photos.length
+        ? `<div class="point-photos ${photos.length === 1 ? 'one' : ''}">${photos.map(src => `<img src="${src}" alt="foto">`).join('')}</div>`
+        : '';
+      return `
+        <div class="point-card">
+          ${photosHtml}
+          <div class="point-body">
+            <div class="point-meta">
+              <span class="point-id">${p.id}</span>
+              <div class="point-time">${p.date}<br>${p.time}</div>
+            </div>
+            <div class="point-coords">
+              LAT ${p.lat.toFixed(6)}° &nbsp; LON ${p.lon.toFixed(6)}°<br>
+              <span style="color:var(--muted);font-size:10px">±${p.acc} m${photos.length ? ` &nbsp;·&nbsp; ${photos.length} foto` : ''}</span>
+            </div>
+            ${p.comment ? `<div class="point-comment">${esc(p.comment)}</div>` : ''}
+            <div class="point-actions">
+              <button class="btn-action btn-maps" onclick="openMaps(${p.lat},${p.lon})">🗺 Google Maps</button>
+              <button class="btn-action btn-del" onclick="deletePoint(${i})">🗑 Elimina</button>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function openMaps(lat, lon) { window.open(`https://www.google.com/maps?q=${lat},${lon}`, '_blank'); }
+
+  function deletePoint(i) {
+    if (!confirm(`Eliminare il punto ${points[i].id}?`)) return;
+    points.splice(i, 1);
+    localStorage.setItem('mapfield_points', JSON.stringify(points));
+    updateBadge(); renderPoints();
+  }
+
+  // ─── EXPORT CSV ──────────────────────────────────────────────────────
+  function exportCSV() {
+    if (!points.length) { alert('Nessun punto da esportare.'); return; }
+    const header = ['ID','Data','Ora','Latitudine','Longitudine','Precisione_m','N_Foto','Commento'];
+    const rows = points.map(p => {
+      const nFoto = (p.photos || (p.photo ? [p.photo] : [])).length;
+      return [p.id, p.date, p.time, p.lat.toFixed(8), p.lon.toFixed(8), p.acc, nFoto, `"${(p.comment||'').replace(/"/g,'""')}"`];
+    });
+    const csv = [header.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+    download('\ufeff' + csv, `mapfield_${today()}.csv`, 'text/csv;charset=utf-8;');
+    showFlash('✓ CSV esportato');
+  }
+
+  // ─── EXPORT JSON ─────────────────────────────────────────────────────
+  function exportJSON() {
+    if (!points.length) { alert('Nessun punto da esportare.'); return; }
+    const payload = { app:'MapField', version:'3.0', exported: new Date().toISOString(), total: points.length, points };
+    download(JSON.stringify(payload, null, 2), `mapfield_backup_${today()}.json`, 'application/json');
+    showFlash(`✓ ${points.length} punti esportati`);
+  }
+
+  // ─── IMPORT JSON ─────────────────────────────────────────────────────
+  function importJSON(e) {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        const imported = Array.isArray(data) ? data : (data.points || []);
+        if (!imported.length) { alert('File JSON vuoto o non valido.'); return; }
+        const merge = confirm(`Trovati ${imported.length} punti.\n\nOK = Aggiungi ai punti esistenti\nAnnulla = Sostituisci tutto`);
+        if (merge) {
+          const ids = new Set(points.map(p => p.id));
+          const nuovi = imported.filter(p => !ids.has(p.id));
+          points = [...points, ...nuovi];
+          showFlash(`✓ +${nuovi.length} punti importati`);
+        } else {
+          if (!confirm('Sicuro? I punti attuali verranno eliminati.')) return;
+          points = imported;
+          showFlash(`✓ ${points.length} punti caricati`);
+        }
+        localStorage.setItem('mapfield_points', JSON.stringify(points));
+        updateBadge(); renderPoints();
+      } catch { alert('Errore: file JSON non valido.'); }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  }
+
+  // ─── EXPORT PDF ──────────────────────────────────────────────────────
+  async function exportPDF() {
+    if (!points.length) { alert('Nessun punto da esportare.'); return; }
+    const overlay = document.getElementById('pdfOverlay');
+    const bar = document.getElementById('pdfBar');
+    const msg = document.getElementById('pdfMsg');
+    overlay.classList.add('show');
+
+    await new Promise(r => setTimeout(r, 50)); // let UI render
+
+    try {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const W = 210, H = 297;
+      const margin = 14;
+      const contentW = W - margin * 2;
+
+      // ── COVER PAGE ──
+      doc.setFillColor(13, 17, 23);
+      doc.rect(0, 0, W, H, 'F');
+      doc.setFillColor(56, 211, 159);
+      doc.rect(0, 0, W, 2, 'F');
+      doc.setTextColor(56, 211, 159);
+      doc.setFontSize(28); doc.setFont('helvetica', 'bold');
+      doc.text('MapField', margin, 60);
+      doc.setFontSize(13); doc.setFont('helvetica', 'normal');
+      doc.setTextColor(113, 128, 150);
+      doc.text('Rapporto Mappatura Territorio', margin, 70);
+      doc.setDrawColor(45, 55, 72);
+      doc.line(margin, 76, W - margin, 76);
+      doc.setTextColor(226, 232, 240);
+      doc.setFontSize(11);
+      doc.text(`Punti rilevati: ${points.length}`, margin, 88);
+      doc.text(`Esportato il: ${new Date().toLocaleDateString('it-IT')} alle ${new Date().toLocaleTimeString('it-IT')}`, margin, 96);
+
+      // ── ONE PAGE PER POINT ──
+      for (let idx = 0; idx < points.length; idx++) {
+        const p = points[idx];
+        const photos = p.photos || (p.photo ? [p.photo] : []);
+        bar.style.width = `${Math.round((idx / points.length) * 100)}%`;
+        msg.textContent = `Generazione PDF… ${idx + 1}/${points.length}`;
+
+        doc.addPage();
+        let y = margin;
+
+        // Header bar
+        doc.setFillColor(22, 27, 34);
+        doc.rect(0, 0, W, 18, 'F');
+        doc.setFillColor(56, 211, 159);
+        doc.rect(0, 0, 3, 18, 'F');
+        doc.setTextColor(56, 211, 159);
+        doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+        doc.text(p.id, 8, 11);
+        doc.setTextColor(113, 128, 150);
+        doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+        doc.text(`${p.date}  ${p.time}`, W - margin, 7, { align: 'right' });
+
+        y = 26;
+
+        // Coords box
+        doc.setFillColor(22, 27, 34);
+        doc.setDrawColor(45, 55, 72);
+        doc.roundedRect(margin, y, contentW, 22, 2, 2, 'FD');
+        doc.setTextColor(56, 211, 159);
+        doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+        doc.text('LAT', margin + 4, y + 7);
+        doc.text('LON', margin + 4, y + 14);
+        doc.text('ACC', margin + 4, y + 19);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(226, 232, 240);
+        doc.text(`${p.lat.toFixed(8)}°`, margin + 14, y + 7);
+        doc.text(`${p.lon.toFixed(8)}°`, margin + 14, y + 14);
+        doc.setTextColor(113, 128, 150);
+        doc.text(`±${p.acc} m`, margin + 14, y + 19);
+
+        // Google Maps link text
+        doc.setTextColor(56, 211, 159);
+        doc.setFontSize(7);
+        doc.text(`maps.google.com/?q=${p.lat.toFixed(6)},${p.lon.toFixed(6)}`, W - margin, y + 11, { align: 'right' });
+        y += 28;
+
+        // Comment
+        if (p.comment) {
+          doc.setFillColor(31, 41, 55);
+          doc.setDrawColor(246, 201, 14);
+          doc.roundedRect(margin, y, contentW, 14, 2, 2, 'FD');
+          doc.setDrawColor(246, 201, 14);
+          doc.setLineWidth(0.8);
+          doc.line(margin, y, margin, y + 14);
+          doc.setLineWidth(0.2);
+          doc.setTextColor(226, 232, 240);
+          doc.setFontSize(9); doc.setFont('helvetica', 'italic');
+          doc.text(p.comment, margin + 5, y + 9);
+          y += 20;
+        }
+
+        // Photos
+        if (photos.length) {
+          doc.setTextColor(113, 128, 150);
+          doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+          doc.text(`FOTO (${photos.length})`, margin, y + 5);
+          y += 8;
+
+          const cols = Math.min(photos.length, 3);
+          const gap = 4;
+          const imgW = (contentW - gap * (cols - 1)) / cols;
+          const imgH = imgW * 0.75;
+
+          let row = 0, col = 0;
+          for (let pi = 0; pi < photos.length; pi++) {
+            await new Promise(r => setTimeout(r, 0)); // keep UI alive
+            const x = margin + col * (imgW + gap);
+            const curY = y + row * (imgH + gap);
+            try {
+              // detect format
+              const fmt = photos[pi].startsWith('data:image/png') ? 'PNG' : 'JPEG';
+              doc.addImage(photos[pi], fmt, x, curY, imgW, imgH);
+              // border
+              doc.setDrawColor(45, 55, 72);
+              doc.setLineWidth(0.3);
+              doc.rect(x, curY, imgW, imgH);
+            } catch(e) {
+              // if image fails, draw placeholder
+              doc.setFillColor(31, 41, 55);
+              doc.rect(x, curY, imgW, imgH, 'F');
+              doc.setTextColor(113, 128, 150);
+              doc.setFontSize(7);
+              doc.text('Foto non disponibile', x + imgW/2, curY + imgH/2, { align:'center' });
+            }
+            col++;
+            if (col >= cols) { col = 0; row++; }
+          }
+          const rows = Math.ceil(photos.length / cols);
+          y += rows * (imgH + gap) + 4;
+        }
+
+        // Footer
+        doc.setFillColor(22, 27, 34);
+        doc.rect(0, H - 10, W, 10, 'F');
+        doc.setTextColor(113, 128, 150);
+        doc.setFontSize(7); doc.setFont('helvetica', 'normal');
+        doc.text('MapField — Mappatura Territorio', margin, H - 4);
+        doc.text(`${idx + 1} / ${points.length}`, W - margin, H - 4, { align: 'right' });
+      }
+
+      bar.style.width = '100%';
+      msg.textContent = 'Salvataggio…';
+      await new Promise(r => setTimeout(r, 200));
+
+      doc.save(`mapfield_report_${today()}.pdf`);
+      overlay.classList.remove('show');
+      showFlash(`✓ PDF con ${points.length} punti`);
+    } catch(err) {
+      overlay.classList.remove('show');
+      alert('Errore nella generazione del PDF: ' + err.message);
+      console.error(err);
+    }
+  }
+
+  // ─── UTILS ───────────────────────────────────────────────────────────
+  function download(content, filename, type) {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function today() { return new Date().toISOString().slice(0, 10); }
+
+  function updateBadge() {
+    document.getElementById('totalBadge').textContent = `${points.length} pt`;
+  }
+
+  function switchTab(name) {
+    document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', ['capture','list'][i] === name));
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('page-' + name).classList.add('active');
+  }
+
+  // ─── INIT ────────────────────────────────────────────────────────────
+  if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+    document.getElementById('httpsWarning').style.display = 'block';
+  }
+  startClock();
+  updateBadge();
+  renderPoints();
+  renderPhotoGrid();
+  getLocation();
+</script>
+</body>
+</html>
